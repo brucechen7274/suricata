@@ -11,11 +11,11 @@
 
 Typical LLM integrations rely on unstructured text, making them hard to maintain, easy to break, and impossible to type-check. Suricata fixes this by:
 
-Generating strongly typed Go code for every message and tool
+- Generating strongly typed Go code for every message and tool
 
-Giving you compile-time guarantees and fewer runtime surprises
+- Giving you compile-time guarantees and fewer runtime surprises
 
-Keeping business logic separate from orchestration for cleaner code
+- Keeping business logic separate from orchestration for cleaner code
 
 Instead of manually wiring prompts and parsing JSON, you declare everything in YAML, generate Go stubs, and let Suricata handle the orchestration.
 Agents can dynamically select tools at runtime while you keep full control and type safety.
