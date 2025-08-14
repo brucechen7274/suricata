@@ -32,6 +32,8 @@ func main() {
 }
 
 func runGen(cmd *cobra.Command, args []string) error {
+	var gen gen.CodeGenerator
+
 	for _, specPath := range args {
 		s, err := spec.LoadSpec(specPath)
 		if err != nil {
