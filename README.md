@@ -9,21 +9,31 @@
 
 ## Why Suricata?
 
-**Suricata** was built to make developing AI agents in Go safe, reliable, and maintainable. Unlike traditional LLM integrations that rely on unstructured data, Suricata generates Go types for every message and tool, giving you compile-time guarantees and reducing runtime errors.
+Typical LLM integrations rely on unstructured text, making them hard to maintain, easy to break, and impossible to type-check. Suricata fixes this by:
 
-Agents, actions, and prompts are defined declaratively in YAML, keeping your business logic separate from orchestration and making updates, testing, and versioning effortless. At runtime, agents can intelligently select from multiple tools, allowing LLMs to choose the right action while you retain full type safety and control.
+Generating strongly typed Go code for every message and tool
 
-Adding new tools or actions is simple: define them in YAML and regenerate stubs, enabling complex workflows without touching the runtime. Suricata follows Go conventions and idioms, so your agents feel like native Go code. Every tool is a Go interface, making testing and debugging straightforward.
+Giving you compile-time guarantees and fewer runtime surprises
 
-In short, Suricata combines LLM intelligence, type safety, and Go-native ergonomics, giving developers the confidence to build robust, production-ready AI agents.
+Keeping business logic separate from orchestration for cleaner code
 
-## 🌟 Features
+Instead of manually wiring prompts and parsing JSON, you declare everything in YAML, generate Go stubs, and let Suricata handle the orchestration.
+Agents can dynamically select tools at runtime while you keep full control and type safety.
+
+Adding a new tool? Just define it in YAML and regenerate. No need to touch the runtime.
+Suricata follows Go conventions and idioms, so your agents feel like native Go code.
+
+In short: Suricata combines LLM intelligence, Go type safety, and a declarative workflow—giving you confidence to build production-ready AI agents.
+
+## Features
 
 - **Type-safe messages**: Define request and response messages and get generated Go types.
 
 - **Declarative agents**: Describe agent behavior, actions, and prompts in a YAML file.
 
 - **Tools integration**: Register multiple tools and let the LLM dynamically choose which one to call.
+
+- **Go template support**: Prompts can use native Go templating, making them dynamic and parameterized without breaking type safety.
 
 - **Code generation**: Generate idiomatic Go client stubs automatically.
 
@@ -75,7 +85,11 @@ agents:
         input: SayHelloAllRequest
         output: SayHelloAllReply
         prompt: |
-          Say hello to all names given as input.
+           {{- /* Use Go templating for dynamic prompts */ -}}
+          Please say hello to all the following names:
+          {{- range .Names }}
+          - {{ . }}
+          {{- end }}
     tools:
       - SayHelloTool
 ```

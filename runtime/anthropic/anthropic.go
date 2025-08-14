@@ -42,8 +42,8 @@ type AnthropicInvoker struct {
 	MaxTokens int
 }
 
-// NewAnthropicInvoker creates a new invoker instance
-func NewAnthropicInvoker(apiKey string, model Model, maxTokens int) *AnthropicInvoker {
+// NewInvoker creates a new invoker instance
+func NewInvoker(apiKey string, model Model, maxTokens int) *AnthropicInvoker {
 	return &AnthropicInvoker{
 		APIKey:    apiKey,
 		Model:     model,
