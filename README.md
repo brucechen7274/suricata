@@ -1,7 +1,7 @@
 <p align="center">
 <img alt="Logo" src="assets/logo.png" width="300px">
 </p>
-<h2 align="center">Suricata: Another agentic AI framework for Go - with type-safety this time.</h2>
+<h2 align="center">Type-Safe AI Agents for Go.</h2>
 
 <p align="center">
   ⚠️ <strong>Note:</strong> Suricata is in early development. Some bugs may exist. Please report issues!
@@ -9,37 +9,30 @@
 
 ## Why Suricata?
 
-Typical LLM integrations rely on unstructured text, making them hard to maintain, easy to break, and impossible to type-check. Suricata fixes this by:
+Most LLM integrations rely on unstructured text—hard to maintain, easy to break, and impossible to type-check. **Suricata fixes this** by:
 
 - Generating strongly typed Go code for every message and tool
 
-- Giving you compile-time guarantees and fewer runtime surprises
+- Providing compile-time guarantees with fewer runtime surprises
 
-- Keeping business logic separate from orchestration for cleaner code
+- Separating business logic from orchestration for cleaner code
 
-Instead of manually wiring prompts and parsing JSON, you declare everything in YAML, generate Go stubs, and let Suricata handle the orchestration.
-Agents can dynamically select tools at runtime while you keep full control and type safety.
+Instead of wiring prompts and parsing JSON, you declare everything in YAML, generate Go stubs, and let Suricata handle orchestration.
+Agents can dynamically choose tools at runtime—while you keep full control and type safety.
 
-Adding a new tool? Just define it in YAML and regenerate. No need to touch the runtime.
-Suricata follows Go conventions and idioms, so your agents feel like native Go code.
+Adding a new tool? Define it in YAML and regenerate—no runtime edits needed. Suricata follows Go idioms, so your agents feel native.
 
-In short: Suricata combines LLM intelligence, Go type safety, and a declarative workflow—giving you confidence to build production-ready AI agents.
+**In short**: Suricata blends LLM intelligence, Go type safety, and a declarative workflow—giving you confidence to build production-ready AI agents.
 
 ## Features
 
-- **Type-safe messages**: Define request and response messages and get generated Go types.
+- **Type-Safe by Design** – Define messages in YAML, generate Go types with compile-time guarantees.
 
-- **Declarative agents**: Describe agent behavior, actions, and prompts in a YAML file.
+- **Declarative Agents** – Describe behavior and prompts in YAML; Suricata handles orchestration.
 
-- **Tools integration**: Register multiple tools and let the LLM dynamically choose which one to call.
+- **Dynamic Tooling** – Register tools once, let agents choose at runtime.
 
-- **Go template support**: Prompts can use native Go templating, making them dynamic and parameterized without breaking type safety.
-
-- **Code generation**: Generate idiomatic Go client stubs automatically.
-
-- **Flexible LLM backend**: Compatible with different LLM invokers (Anthropic, OpenAI, etc.).
-
-- **Easy testing & mocking**: Tools are interfaces, making unit tests simple.
+- **Idiomatic Go Code** – Automatic stub generation, Go templates for dynamic prompts, and easy testing.
 
 ## Quickstart
 
@@ -47,8 +40,8 @@ Write an `hello-spec.yml` file:
 
 ```yaml
 
-version: llm-1
-package: example.v1
+version: 0.0.1
+package: example.hello
 
 messages:
   SayHelloAllRequest:
@@ -103,10 +96,18 @@ suricata gen hello-spec.yml
 Then, use your generated stubs:
 
 ```golang
+package main
+
+import (
+  ...
+  
+	"github.com/ostafen/suricata/example/hello"
+)
+
 func main() {
 	invoker := anthropic.NewAnthropicInvoker(APIKey, anthropic.ClaudeSonnet37, 1024)
 
-	cli := v1.NewHelloAgentClient(invoker, &tools{})
+	cli := v1.NewHelloAgent(invoker, &tools{})
 
 	res, err := cli.SayHelloAll(context.Background(), &v1.SayHelloAllRequest{
 		Names: []string{"Pippo", "Pluto"},
