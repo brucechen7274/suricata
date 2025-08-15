@@ -36,9 +36,7 @@ const (
 	ClaudeSonnet37   Model = "claude-3-7-sonnet-20250219"
 	ClaudeOpus4      Model = "claude-opus-4-20250514"
 	ClaudeSonnet4    Model = "claude-sonnet-4-20250514"
-)
 
-const (
 	RoleUser      = "user"
 	RoleAssistant = "assistant"
 	RoleSystem    = "system"

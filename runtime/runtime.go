@@ -99,34 +99,65 @@ func (r *Runtime) Invoke(ctx context.Context, req Request) error {
 }
 
 func (r *Runtime) agentLoop(ctx context.Context, out string, req *Request, sess *ChatSession) error {
-	var resp ToolResponse
-
 	for {
-		out = ExtractJSONFromString(out)
-		if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
+		resp, err := parseToolResponse(out)
+		if err != nil {
 			return err
 		}
 
 		if resp.Done {
-			break
+			rawOut, err := json.Marshal(resp.Out)
+			if err != nil {
+				return fmt.Errorf("marshal final output: %w", err)
+			}
+			return unmarshalOutput(string(rawOut), req)
 		}
 
-		rawArgs, _ := json.Marshal(resp.Args)
+		// Validate tool name and args
+		if resp.Name == "" {
+			return errors.New("tool response missing 'name'")
+		}
+		if resp.Args == nil {
+			return fmt.Errorf("tool '%s' missing 'args'", resp.Name)
+		}
+
+		// Convert raw args into typed input
+		rawArgs, err := json.Marshal(resp.Args)
+		if err != nil {
+			return fmt.Errorf("marshal tool args: %w", err)
+		}
+
 		inType, err := req.ToolUnmarshaller(resp.Name, rawArgs)
 		if err != nil {
-			return err
+			return fmt.Errorf("tool unmarshal for '%s': %w", resp.Name, err)
 		}
 
 		toolOutput := r.callTool(ctx, resp.Name, inType, req)
 
 		out, err = sess.Invoke(ctx, toolOutput)
 		if err != nil {
-			return err
+			return fmt.Errorf("invoke session after tool '%s': %w", resp.Name, err)
 		}
 	}
+}
 
-	rawOut, _ := json.Marshal(resp.Out)
-	return unmarshalOutput(string(rawOut), req)
+func parseToolResponse(raw string) (ToolResponse, error) {
+	rawJSON := ExtractJSONFromString(raw)
+	if rawJSON == "" {
+		return ToolResponse{}, errors.New("no valid JSON found in response")
+	}
+
+	var resp ToolResponse
+	if err := json.Unmarshal([]byte(rawJSON), &resp); err != nil {
+		return ToolResponse{}, fmt.Errorf("invalid JSON format: %s", rawJSON)
+	}
+	return resp, nil
 }
 
 func (r *Runtime) callTool(ctx context.Context, name string, inType any, req *Request) string {
@@ -153,117 +184,10 @@ func (r *Runtime) preparePrompt(req *Request) (string, error) {
 		return "", err
 	}
 
-	prompt := getPrompt(compiledPrompt, req)
+	var pb PromptBuilder
+
+	prompt := pb.Build(compiledPrompt, req)
 	return prompt, nil
-}
-
-func getPrompt(userPrompt string, req *Request) string {
-	prompt := getInstructions(req.Instructions)
-
-	prompt += `
-USER PROMPT:
-
-` + userPrompt
-
-	if req.ToolInvoker != nil {
-		prompt += `
-WORKFLOW:
-
-1. You will be given the conversation so far, including:
-   - The original user request.
-   - Your previous reasoning and tool calls.
-   - Tool outputs or error messages.
-
-2. After receiving a tool output or error, you must:
-   - Analyze if the goal is achieved.
-   - If more steps are required, call another tool with correct parameters.
-   - If the goal is complete, provide a clear, final answer to the user.
-`
-	}
-
-	if !req.SkipInput {
-		rawInput, _ := json.Marshal(req.Input)
-		prompt += "\nINPUT:\n\n" + string(rawInput) + "\n"
-	}
-
-	outSchemaJSON, _ := req.OutputSchema.LoadJSON()
-	rawSchema, _ := json.Marshal(outSchemaJSON)
-
-	prompt += getToolsSection(req.ToolSpecs)
-	prompt += getOutputSection(string(rawSchema), req.ToolInvoker != nil)
-
-	prompt += `
-
-GUIDELINES:
-
-- Do not include any extra text.
-- Do not include markdown or code fences.
-- Ensure the JSON is syntactically valid.
-- All fields must be present, even if empty.
-`
-	return prompt
-}
-
-func getInstructions(instructions string) string {
-	if instructions == "" {
-		return ""
-	}
-	return "SYSTEM INSTRUCTIONS:\n\n" + instructions + "\n\n"
-}
-
-func getOutputSection(outSchema string, hasTools bool) string {
-	if !hasTools {
-		return `
-OUTPUT FORMAT:
-
-Return ONLY a valid JSON object that matches the following JSON schema:
-
-` + outSchema
-	}
-
-	return `
-OUTPUT FORMAT:
-
-After each tool output or error, you must return exactly one JSON object, following these rules:
-
-1. If more steps are required (another tool call):
-
-{
-	"name": "<tool name>",
-	"args": {...}
-}
-
-- "name": The exact name of the tool to call (must be one of the tools listed in the TOOLS section).
-- "args": A JSON object that matches the input schema for the selected tool exactly.
-- Do not include extra fields or omit required fields.
-
-2. If goal is achieved (final output):
-
-{
-	"done": true,
-	"out": {...}
-}
-
-where "out" is a JSON object strictly matching the following JSON schema:
-
-` + outSchema
-}
-
-func getToolsSection(tools []ToolSpec) string {
-	if len(tools) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString("\n[TOOLS]\n\n")
-
-	for _, tool := range tools {
-		inSchema, _ := tool.Schema.LoadJSON()
-		rawInSchema, _ := json.Marshal(inSchema)
-
-		fmt.Fprintf(&sb, "- Name: %s\n Description: %s\n InputSchema: %s\n\n", tool.Name, tool.Description, rawInSchema)
-	}
-	return sb.String()
 }
 
 func (r *Runtime) compilePrompt(req *Request) (string, error) {

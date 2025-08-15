@@ -84,7 +84,7 @@ func (gen *JSONSchemaGenerator) fieldToSchema(field spec.Field, allMessages map[
 	case "bool":
 		baseSchema = map[string]any{"type": "boolean"}
 	default:
-		// Custom type — lookup in allMessages
+		// Custom type - lookup in allMessages
 		msg, ok := allMessages[field.Type]
 		if !ok {
 			return nil, fmt.Errorf("unknown custom type %q", field.Type)
@@ -104,7 +104,7 @@ func (gen *JSONSchemaGenerator) fieldToSchema(field spec.Field, allMessages map[
 
 	// Wrap in array if repeated
 	if field.Repeated {
-		return map[string]interface{}{
+		return map[string]any{
 			"type":  "array",
 			"items": baseSchema,
 		}, nil
