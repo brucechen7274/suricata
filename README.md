@@ -36,7 +36,11 @@ Adding a new tool? Define it in YAML and regenerate—no runtime edits needed. S
 
 ## Quickstart
 
-Write an `hello-spec.yml` file:
+Getting started with Suricata is simple: **declare your agents and tools in YAML, generate Go code, and start building type-safe AI workflows.**
+
+### 1. Define Your Specification
+
+Create a `hello-spec.yml` file describing your **messages**, **tools**, and **agents**:
 
 ```yaml
 
@@ -87,13 +91,29 @@ agents:
       - SayHelloTool
 ```
 
-Then, to generate the Go stubs, run:
+This file is your **single source of truth**:
+
+- **Messages** define type-safe request and response payloads.
+- **Tools** describe external functions the agent can call.
+- **Agents** specify behavior, actions, and prompts using Go templates for dynamic content.
+
+### 2. Generate Go Code
+
+Run the generator to produce fully typed Go stubs:
 
 ```bash
 suricata gen hello-spec.yml
 ```
 
-Then, use your generated stubs:
+This creates:
+
+- Strongly typed structs for messages
+- Interfaces for tools
+- An idiomatic Go client for your agent
+
+### 3. Implement and Run
+
+Use the generated code in your Go app:
 
 ```golang
 package main
@@ -127,6 +147,8 @@ func (t *tools) SayHelloTool(in *v1.SayHelloToolRequest) (*v1.SayHelloToolReply,
 	return &v1.SayHelloToolReply{Ok: true}, nil
 }
 ```
+
+That's it — you've built a type-safe AI agent that can dynamically select tools while keeping your Go code clean and maintainable.
 
 ## 📄 License
 
