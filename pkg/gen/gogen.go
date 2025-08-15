@@ -203,7 +203,7 @@ func (gen *CodeGenerator) generateToolsInterface(name string, tools []string, to
 	for _, toolName := range tools {
 		tool := toolsMap[toolName]
 
-		gen.write("%s(in *%s) (*%s, error)\n", CapitalizeFirst(toolName), tool.Input, tool.Output)
+		gen.write("%s(ctx context.Context, in *%s) (*%s, error)\n", CapitalizeFirst(toolName), tool.Input, tool.Output)
 	}
 
 	gen.write("}\n\n")
@@ -237,7 +237,7 @@ func (gen *CodeGenerator) generateToolsInvoker(name string, tools []string, tool
 
 	for _, name := range tools {
 		tool := toolsMap[name]
-		gen.write("\t\t case \"%s\":\n\t\t\treturn a.tools.%s(in.(*%s))\n", name, name, tool.Input)
+		gen.write("\t\t case \"%s\":\n\t\t\treturn a.tools.%s(ctx, in.(*%s))\n", name, name, tool.Input)
 	}
 
 	gen.write("\t}\n")

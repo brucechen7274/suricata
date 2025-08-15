@@ -32,45 +32,44 @@ var ErrInvalidOutput = errors.New("invalid output")
 type (
 	ToolUnmarshaller func(name string, data []byte) (any, error)
 	ToolInvoker      func(ctx context.Context, name string, in any) (any, error)
+
+	ToolSpec struct {
+		Name        string
+		Description string
+		Schema      gojsonschema.JSONLoader
+	}
+
+	ToolResponse struct {
+		Done bool `json:"done"`
+		Out  any  `json:"out"`
+
+		Name string `json:"name"`
+		Args any    `json:"args"`
+	}
+
+	Request struct {
+		SkipInput      bool
+		Instructions   string
+		PromptTemplate string // Go template string for the prompt
+		Input          any    // Data passed to the prompt template
+		Output         any
+		InputSchema    gojsonschema.JSONLoader
+		OutputSchema   gojsonschema.JSONLoader // Pointer to struct to unmarshal output JSON into
+
+		ToolUnmarshaller ToolUnmarshaller
+		ToolInvoker      ToolInvoker
+		ToolSpecs        []ToolSpec
+	}
+
+	Runtime struct {
+		invoker Invoker
+	}
 )
-
-// Request holds the input parameters for an LLM call.
-type Request struct {
-	SkipInput      bool
-	Instructions   string
-	PromptTemplate string // Go template string for the prompt
-	Input          any    // Data passed to the prompt template
-	Output         any
-	InputSchema    gojsonschema.JSONLoader
-	OutputSchema   gojsonschema.JSONLoader // Pointer to struct to unmarshal output JSON into
-
-	ToolUnmarshaller ToolUnmarshaller
-	ToolInvoker      ToolInvoker
-	ToolSpecs        []ToolSpec
-}
-
-type Runtime struct {
-	invoker Invoker
-}
 
 func NewRuntime(invoker Invoker) *Runtime {
 	return &Runtime{
 		invoker: invoker,
 	}
-}
-
-type ToolSpec struct {
-	Name        string
-	Description string
-	Schema      gojsonschema.JSONLoader
-}
-
-type ToolResponse struct {
-	Done bool `json:"done"`
-	Out  any  `json:"out"`
-
-	Name string `json:"name"`
-	Args any    `json:"args"`
 }
 
 func (r *Runtime) Invoke(ctx context.Context, req Request) error {
@@ -83,7 +82,7 @@ func (r *Runtime) Invoke(ctx context.Context, req Request) error {
 		return err
 	}
 
-	sess := NewChatSession(r.invoker)
+	sess := NewChatSession(r.invoker, req.Instructions)
 
 	out, err := sess.Invoke(
 		ctx,
@@ -137,7 +136,7 @@ func (r *Runtime) callTool(ctx context.Context, name string, inType any, req *Re
 	}
 
 	rawToolResp, _ := json.Marshal(toolResp)
-	return "OUTPUT: " + string(rawToolResp)
+	return name + " OUTPUT: " + string(rawToolResp)
 }
 
 func unmarshalOutput(out string, req *Request) error {

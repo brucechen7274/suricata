@@ -1,0 +1,49 @@
+version: llm-1
+package: hello
+
+messages:
+  SayHelloAllRequest:
+    fields:
+      - name: names
+        type: string
+        repeated: true
+  
+  SayHelloAllReply:
+    fields:
+      - name: ok
+        type: bool
+
+  SayHelloToolRequest:
+    fields:
+      - name: name
+        type: string
+        description: the name
+  
+  SayHelloToolReply:
+    fields:
+      - name: ok
+        type: bool
+
+tools:
+  SayHelloTool:
+    description: "say hello to a given name"
+    input: SayHelloToolRequest
+    output: SayHelloToolReply
+
+agents:
+  helloAgent:
+    instructions: |
+      You are a helpful and precise assistant. Your role is to say hello to people.
+    actions:
+      SayHelloAll:
+        description: "Say hello to all names given as input"
+        input: SayHelloAllRequest
+        output: SayHelloAllReply
+        prompt: |
+          {{- /* Use Go templating for dynamic prompts */ -}}
+          Please say hello to all the following names:
+          {{- range .Names }}
+          - {{ . }}
+          {{- end }}
+    tools:
+      - SayHelloTool

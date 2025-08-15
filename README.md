@@ -116,20 +116,19 @@ This creates:
 Use the generated code in your Go app:
 
 ```golang
-package main
-
-import (
-  ...
-  
-	"github.com/ostafen/suricata/example/hello"
-)
-
 func main() {
-	invoker := anthropic.NewAnthropicInvoker(APIKey, anthropic.ClaudeSonnet37, 1024)
+	invoker := ollama.NewInvoker(
+		ollama.DefaultBaseURL,
+		"granite3.3:8b",
+		ollama.Options{
+			NumCtx:      131072,
+			Temperature: 0.1,
+		},
+	)
 
-	cli := v1.NewHelloAgent(invoker, &tools{})
+	helloAgent := hello.NewHelloAgent(invoker, &tools{})
 
-	res, err := cli.SayHelloAll(context.Background(), &v1.SayHelloAllRequest{
+	res, err := helloAgent.SayHelloAll(context.Background(), &hello.SayHelloAllRequest{
 		Names: []string{"Pippo", "Pluto"},
 	})
 	if err != nil {
@@ -141,10 +140,10 @@ func main() {
 
 type tools struct{}
 
-func (t *tools) SayHelloTool(in *v1.SayHelloToolRequest) (*v1.SayHelloToolReply, error) {
+func (t *tools) SayHelloTool(ctx context.Context, in *hello.SayHelloToolRequest) (*hello.SayHelloToolReply, error) {
 	fmt.Println("Hello " + in.Name)
 
-	return &v1.SayHelloToolReply{Ok: true}, nil
+	return &hello.SayHelloToolReply{Ok: true}, nil
 }
 ```
 

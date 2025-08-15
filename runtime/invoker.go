@@ -41,11 +41,11 @@ type ChatSession struct {
 	invoker  Invoker
 }
 
-func NewChatSession(invoker Invoker) *ChatSession {
+func NewChatSession(invoker Invoker, systemPrompt string) *ChatSession {
 	return &ChatSession{
 		invoker:  invoker,
 		messages: nil,
-		system:   "", // TODO: integrate system prompt
+		system:   systemPrompt,
 	}
 }
 

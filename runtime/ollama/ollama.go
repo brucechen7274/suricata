@@ -29,14 +29,16 @@ import (
 const DefaultBaseURL = "http://localhost:11434"
 
 type OllamaInvoker struct {
-	baseURL string // e.g.
+	baseURL string
 	model   string
+	opts    Options
 }
 
-func NewInvoker(baseURL, model string) *OllamaInvoker {
+func NewInvoker(baseURL, model string, opts Options) *OllamaInvoker {
 	return &OllamaInvoker{
 		baseURL: baseURL,
 		model:   model,
+		opts:    opts,
 	}
 }
 
@@ -58,17 +60,32 @@ type OllamaMessage struct {
 	Content string `json:"content"`
 }
 
+type Options struct {
+	Temperature float64 `json:"temperature"`
+	NumCtx      int     `json:"num_ctx"`
+}
+
 type OllamaPayload struct {
 	Model    string          `json:"model"`
 	Messages []OllamaMessage `json:"messages"`
+	Prompt   string          `json:"prompt"`
+	Stream   bool            `json:"stream"`
+	Options  Options         `json:"options"`
 }
 
 func (o *OllamaInvoker) Invoke(ctx context.Context, systemPrompt string, messages []runtime.Message) (string, error) {
 	payload := OllamaPayload{
-		Model: o.model,
-		Messages: []OllamaMessage{
-			{Role: "system", Content: systemPrompt},
-		},
+		Model:    o.model,
+		Messages: nil,
+		Stream:   false,
+		Options:  o.opts,
+	}
+
+	if systemPrompt != "" {
+		payload.Messages = append(payload.Messages, OllamaMessage{
+			Role:    roleToOllamaRole(runtime.RoleSystem),
+			Content: systemPrompt,
+		})
 	}
 
 	for _, m := range messages {
@@ -83,7 +100,7 @@ func (o *OllamaInvoker) Invoke(ctx context.Context, systemPrompt string, message
 		return "", err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/completions", o.baseURL), bytes.NewBuffer(data))
+	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/api/chat", o.baseURL), bytes.NewBuffer(data))
 	if err != nil {
 		return "", err
 	}
@@ -101,11 +118,11 @@ func (o *OllamaInvoker) Invoke(ctx context.Context, systemPrompt string, message
 	}
 
 	var result struct {
-		Completion string `json:"completion"`
+		Message OllamaMessage `json:"message"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return "", err
 	}
-	return result.Completion, nil
+	return result.Message.Content, nil
 }

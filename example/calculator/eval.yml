@@ -1,0 +1,67 @@
+version: 0.0.1
+package: eval
+
+messages:
+  MathRequest:
+    fields:
+      - name: a
+        type: float
+      - name: b
+        type: float
+  MathReply:
+    fields:
+      - name: result
+        type: float
+
+  EvalRequest:
+    type: object
+    fields:
+      - name: expr
+        type: string
+
+  EvalReply:
+    type: object
+    fields:
+      - name: result
+        type: float
+
+tools:
+  AddTool:
+    description: "Add two numbers"
+    input: MathRequest
+    output: MathReply
+
+  SubTool:
+    description: "Subtract two numbers"
+    input: MathRequest
+    output: MathReply
+
+  MulTool:
+    description: "Multiply two numbers"
+    input: MathRequest
+    output: MathReply
+
+  DivTool:
+    description: "Divide two numbers"
+    input: MathRequest
+    output: MathReply
+
+agents:
+  MathAgent:
+    instructions: |
+      You are a math assistant. You receive a math expression containing +, -, *, /.
+      Break it down into steps and use the appropriate tool for each operation.
+      Return the final numeric result.
+    actions:
+      Evaluate:
+        description: "Evaluate a math expression step by step"
+        input: EvalRequest
+        output: EvalReply
+        prompt: |
+          {{- /* Decide the operation sequence and tool calls */ -}}
+          Evaluate the expression: {{ .Expr }}
+    tools:
+      - AddTool
+      - SubTool
+      - MulTool
+      - DivTool

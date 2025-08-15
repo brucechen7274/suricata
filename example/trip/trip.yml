@@ -1,0 +1,173 @@
+version: 0.0.1
+package: travel
+
+messages:
+  FlightRequest:
+    fields:
+      - name: from
+        type: Location
+      - name: to
+        type: Location
+      - name: date
+        type: string
+      - name: round_trip
+        type: bool
+
+  Flight:
+    fields:
+      - name: id
+        type: string
+      - name: cost
+        type: float
+      - name: round_trip
+        type: bool
+
+  FlightReply:
+    fields:
+      - name: flights
+        type: Flight
+        repeated: true
+
+  BookFlightRequest:
+    fields:
+      - name: id
+        type: int
+  
+  BookFlightReply:
+    fields:
+      - name: booked
+        type: bool
+
+  HotelRequest:
+    fields:
+      - name: location
+        type: Location
+      - name: checkin_date
+        type: string
+      - name: checkout_date
+        type: string
+
+  HotelReply:
+    fields:
+      - name: booked
+        type: bool
+
+  ItineraryRequest:
+    fields:
+      - name: request
+        type: string
+
+  Location:
+    fields:
+      - name: country
+        type: string
+      - name: city
+        type: string
+
+  ItineraryReply:
+    fields:
+      - name: from
+        type: Location
+
+      - name: to
+        type: Location
+
+      - name: start_date
+        type: string
+      
+      - name: end_date
+        type: string
+
+  BookHotelRequest:
+    fields:
+      - name: name
+        type: string
+      
+      - name: checkin_date
+        type: string
+
+      - name: checkout_date
+        type: string
+
+      - name: rooms
+        type: int
+  
+  BookHotelReply:
+    fields:
+      - name: booked
+        type: bool
+  
+  FindHotelRequest:
+    fields:
+      - name: location
+        type: Location
+      - name: checkin_date
+        type: string
+      - name: checkout_date
+        type: string
+  
+  Hotel:
+    fields:
+      - name: name
+        type: string
+
+  FindHotelReply:
+    fields:
+      - name: hotels
+        type: Hotel
+        repeated: true
+
+tools:
+  FindFlights:
+    description: "Find flights between two cities"
+    input: FlightRequest
+    output: FlightReply
+
+  BookFlight:
+    description: "Book a flight for a given date"
+    input: BookFlightRequest
+    output: BookFlightReply
+
+  FindHotels:
+    description: "Find hotels in a city"
+    input: FindHotelRequest
+    output: FindHotelReply
+
+  BookHotel:
+    description: "Create an hotel reservation"
+    input: BookHotelRequest
+    output: BookHotelReply
+
+agents:
+  FlightAgent:
+    instructions: |
+      You are a flight planning assistant. Your role is to find the most suitable flight option.
+    actions:
+      SearchFlights:
+        description: "Search flights for a given route and date and book the cheapest"
+        input: FlightRequest
+        output: FlightReply
+    tools:
+      - FindFlights
+      - BookFlight
+
+  HotelAgent:
+    instructions: |
+      You are a hotel planning assistant. Your role is to provide hotel options.
+    actions:
+      BookHotel:
+        description: "Book an hotel for a given city and date range"
+        input: HotelRequest
+        output: HotelReply
+    tools:
+      - FindHotels
+      - BookHotel
+
+  ItineraryAgent:
+    instructions: |
+      You are an itinerary planner. Combine flight and hotel results into a suggested itinerary.
+    actions:
+      ExtractInfo:
+        description: "Extract itinerary data into the output"
+        input: ItineraryRequest
+        output: ItineraryReply

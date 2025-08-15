@@ -22,6 +22,7 @@ import (
 	"github.com/xeipuuv/gojsonschema"
 )
 
+// UnmarshalValidate validates JSON against a schema, then unmarshals it into 'out'.
 func UnmarshalValidate(data []byte, out any, schema gojsonschema.JSONLoader) error {
 	if err := ValidateRawJSON(data, schema); err != nil {
 		return err
@@ -29,6 +30,7 @@ func UnmarshalValidate(data []byte, out any, schema gojsonschema.JSONLoader) err
 	return json.Unmarshal(data, out)
 }
 
+// ValidateRawJSON checks if JSON data conforms to the given schema.
 func ValidateRawJSON(data []byte, schema gojsonschema.JSONLoader) error {
 	res, err := gojsonschema.Validate(schema, gojsonschema.NewBytesLoader(data))
 	if err != nil {
@@ -41,6 +43,7 @@ func ValidateRawJSON(data []byte, schema gojsonschema.JSONLoader) error {
 	return nil
 }
 
+// ValidateJSON marshals 'in' to JSON and validates it against the schema.
 func ValidateJSON(in any, schema gojsonschema.JSONLoader) error {
 	data, err := json.Marshal(in)
 	if err != nil {
