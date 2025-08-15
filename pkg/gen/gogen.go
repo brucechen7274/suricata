@@ -1,3 +1,18 @@
+// Copyright (c) 2025 Suricata Contributors
+// Original Author: Stefano Scafiti
+//
+// This file is part of Suricata: Type-Safe AI Agents for Go.
+//
+// Licensed under the MIT License. You may obtain a copy of the License at
+//
+//	https://opensource.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package gen
 
 import (
@@ -31,7 +46,6 @@ func (gen *CodeGenerator) Generate(spec *spec.Spec) ([]byte, error) {
 
 	gen.write(`import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/ostafen/suricata/runtime"
 	"github.com/xeipuuv/gojsonschema"
@@ -101,44 +115,41 @@ func (gen *CodeGenerator) generateTypes(messages map[string]spec.Message) {
 	gen.write(")\n")
 }
 
+func getAgentTypeName(name string) string {
+	name = CapitalizeFirst(name)
+
+	if strings.HasSuffix(strings.ToLower(name), "agent") {
+		return name[:len(name)-len("agent")] + "Agent"
+	}
+	return name + "Agent"
+}
+
 func (gen *CodeGenerator) generateAgent(name string, agent *spec.Agent, tools map[string]spec.Tool) {
+	name = getAgentTypeName(name)
+
 	gen.generateToolsInterface(name, agent.Tools, tools)
 	gen.generateToolsSpec(name, agent.Tools, tools)
 
 	instructions := escapeBackticks(agent.Instructions)
 	gen.write("var %sInstructions =  `%s`\n\n", name, instructions)
 
-	// Generate client struct
 	if len(agent.Tools) > 0 {
-		gen.write("type %sClient struct {\n\truntime *runtime.Runtime\n\ttools %sTools\n}\n\n", name, name)
-		gen.write("func New%sClient(invoker runtime.Invoker, tools %sTools) *%sClient {\n\treturn &%sClient{runtime: runtime.NewRuntime(runtime.NewChatSession(invoker)), tools: tools}\n}\n\n", name, name, name, name)
+		gen.write("type %s struct {\n\truntime *runtime.Runtime\n\ttools %sTools\n}\n\n", name, name)
+		gen.write("func New%s(invoker runtime.Invoker, tools %sTools) *%s {\n\treturn &%s{runtime: runtime.NewRuntime(invoker), tools: tools}\n}\n\n", name, name, name, name)
 	} else {
-		gen.write("type %sClient struct {\n\truntime *runtime.Runtime\n}\n\n", name)
-		gen.write("func New%sClient(invoker runtime.Invoker) *%sClient {\n\treturn &%sClient{runtime: runtime.NewRuntime(invoker)}\n}\n\n", name, name, name)
+		gen.write("type %s struct {\n\truntime *runtime.Runtime\n}\n\n", name)
+		gen.write("func New%s(invoker runtime.Invoker) *%s {\n\treturn &%s{runtime: runtime.NewRuntime(invoker)}\n}\n\n", name, name, name)
 	}
 
 	gen.generateUnmarshaller(name, agent.Tools, tools)
 	gen.generateToolsInvoker(name, agent.Tools, tools)
 
-	// TODO: capitalize first letter of name
 	for actionName, action := range agent.Actions {
-		inType := action.Input
-		outType := action.Output
-		methodName := actionName
+		inType := CapitalizeFirst(action.Input)
+		outType := CapitalizeFirst(action.Output)
+		methodName := CapitalizeFirst(actionName)
 
-		gen.write(fmt.Sprintf("func (c *%sClient) %s(ctx context.Context, in *%s) (*%s, error) {\n", name, methodName, inType, outType))
-
-		gen.write("\t// Validate input JSON\n")
-		gen.write("\tinBytes, err := json.Marshal(in)\n")
-		gen.write("\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"marshal input: %w\", err)\n\t}\n")
-
-		// Validate input schema if available
-		gen.write("\tif %sSchema != nil {\n", inType)
-		gen.write("\t\tresult, err := gojsonschema.Validate(%sSchema, gojsonschema.NewBytesLoader(inBytes))\n", inType)
-		gen.write("\t\tif err != nil {\n\t\t\treturn nil, fmt.Errorf(\"input schema validation error: %w\", err)\n\t\t}\n")
-		gen.write("\t\tif !result.Valid() {\n")
-		gen.write("\t\t\treturn nil, fmt.Errorf(\"input validation failed: %%v\", result.Errors())\n\t\t}\n")
-		gen.write("\t}\n\n")
+		gen.write(fmt.Sprintf("func (c *%s) %s(ctx context.Context, in *%s) (*%s, error) {\n", name, methodName, inType, outType))
 
 		// Prepare prompt (raw string literal)
 		prompt := escapeBackticks(action.Prompt)
@@ -146,16 +157,17 @@ func (gen *CodeGenerator) generateAgent(name string, agent *spec.Agent, tools ma
 
 		gen.write("\t// Invoke LLM runtime\n")
 		gen.write("\tout := %s{}\n", outType)
-		gen.write("\terr = c.runtime.Invoke(ctx, runtime.Request{\n")
+		gen.write("\terr := c.runtime.Invoke(ctx, runtime.Request{\n")
 		gen.write("\t\tSkipInput: %t,\n", action.SkipInput)
 		gen.write("\t\tInstructions: %sInstructions,\n", name)
 		gen.write("\t\tPromptTemplate: prompt,\n")
 		gen.write("\t\tInput: in,\n")
 		gen.write("\t\tOutput: &out,\n")
-
+		gen.write("\t\tInputSchema: %sSchema ,\n", inType)
 		gen.write("\t\tOutputSchema: %sSchema ,\n", outType)
+
 		if len(agent.Tools) > 0 {
-			gen.write("\t\tToolUnmarshaller: %sToolsUnmarshaller,\n", name)
+			gen.write("\t\tToolUnmarshaller: c.unmarshaller,\n")
 			gen.write("\t\tToolInvoker: c.toolsInvoker,\n")
 			gen.write("\t\tToolSpecs: %sToolsSpec,\n", name)
 		}
@@ -176,7 +188,7 @@ func (gen *CodeGenerator) generateToolsSpec(name string, tools []string, toolsMa
 	gen.write("var %sToolsSpec = []runtime.ToolSpec{", name)
 	for _, name := range tools {
 		t := toolsMap[name]
-		gen.write("{Name: \"%s\", Description: \"%s\", Schema: %sSchema},", name, t.Description, t.Input)
+		gen.write("{Name: \"%s\", Description: \"%s\", Schema: %sSchema},", CapitalizeFirst(name), t.Description, t.Input)
 	}
 	gen.write("}\n\n")
 }
@@ -191,7 +203,7 @@ func (gen *CodeGenerator) generateToolsInterface(name string, tools []string, to
 	for _, toolName := range tools {
 		tool := toolsMap[toolName]
 
-		gen.write("%s(in *%s) (*%s, error)\n", toolName, tool.Input, tool.Output)
+		gen.write("%s(in *%s) (*%s, error)\n", CapitalizeFirst(toolName), tool.Input, tool.Output)
 	}
 
 	gen.write("}\n\n")
@@ -202,7 +214,7 @@ func (gen *CodeGenerator) generateUnmarshaller(name string, tools []string, tool
 		return
 	}
 
-	gen.write("\nfunc %sToolsUnmarshaller(method string, data []byte) (any, error) {\n", name)
+	gen.write("\nfunc (a *%s) unmarshaller(method string, data []byte) (any, error) {\n", name)
 	gen.write("\tswitch method {\n")
 
 	for _, name := range tools {
@@ -220,7 +232,7 @@ func (gen *CodeGenerator) generateToolsInvoker(name string, tools []string, tool
 		return
 	}
 
-	gen.write("\nfunc (a *%sClient) toolsInvoker(ctx context.Context, name string, in any) (any, error) {\n", name)
+	gen.write("\nfunc (a *%s) toolsInvoker(ctx context.Context, name string, in any) (any, error) {\n", name)
 	gen.write("\tswitch name {\n")
 
 	for _, name := range tools {
@@ -244,12 +256,11 @@ func toCamelCase(s string) string {
 		if len(p) == 0 {
 			continue
 		}
-		parts[i] = strings.ToUpper(p[:1]) + p[1:]
+		parts[i] = CapitalizeFirst(p)
 	}
 	return strings.Join(parts, "")
 }
 
-// goTypeForField maps your DSL field to Go type considering optional/repeated
 func goTypeForField(f spec.Field) string {
 	var goType string
 	switch f.Type {
@@ -274,10 +285,16 @@ func goTypeForField(f spec.Field) string {
 	if f.Repeated {
 		goType = "[]" + goType
 	}
-
 	return goType
 }
 
 func escapeBackticks(s string) string {
 	return strings.ReplaceAll(s, "`", "` + \"`\" + `")
+}
+
+func CapitalizeFirst(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	return strings.ToUpper(string(s[0])) + s[1:]
 }

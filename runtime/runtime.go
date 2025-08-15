@@ -1,3 +1,18 @@
+// Copyright (c) 2025 Suricata Contributors
+// Original Author: Stefano Scafiti
+//
+// This file is part of Suricata: Type-Safe AI Agents for Go.
+//
+// Licensed under the MIT License. You may obtain a copy of the License at
+//
+//	https://opensource.org/licenses/MIT
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package runtime
 
 import (
@@ -26,6 +41,7 @@ type Request struct {
 	PromptTemplate string // Go template string for the prompt
 	Input          any    // Data passed to the prompt template
 	Output         any
+	InputSchema    gojsonschema.JSONLoader
 	OutputSchema   gojsonschema.JSONLoader // Pointer to struct to unmarshal output JSON into
 
 	ToolUnmarshaller ToolUnmarshaller
@@ -34,11 +50,13 @@ type Request struct {
 }
 
 type Runtime struct {
-	chat *ChatSession
+	invoker Invoker
 }
 
-func NewRuntime(chat *ChatSession) *Runtime {
-	return &Runtime{chat: chat}
+func NewRuntime(invoker Invoker) *Runtime {
+	return &Runtime{
+		invoker: invoker,
+	}
 }
 
 type ToolSpec struct {
@@ -56,14 +74,18 @@ type ToolResponse struct {
 }
 
 func (r *Runtime) Invoke(ctx context.Context, req Request) error {
-	compiledPrompt, err := r.compilePrompt(&req)
+	if err := ValidateJSON(req.Input, req.InputSchema); err != nil {
+		return err
+	}
+
+	prompt, err := r.preparePrompt(&req)
 	if err != nil {
 		return err
 	}
 
-	prompt := getPrompt(compiledPrompt, &req)
+	sess := NewChatSession(r.invoker)
 
-	out, err := r.chat.Invoke(
+	out, err := sess.Invoke(
 		ctx,
 		prompt,
 	)
@@ -74,10 +96,10 @@ func (r *Runtime) Invoke(ctx context.Context, req Request) error {
 	if req.ToolInvoker == nil {
 		return unmarshalOutput(out, &req)
 	}
-	return r.agentLoop(ctx, out, &req)
+	return r.agentLoop(ctx, out, &req, sess)
 }
 
-func (r *Runtime) agentLoop(ctx context.Context, out string, req *Request) error {
+func (r *Runtime) agentLoop(ctx context.Context, out string, req *Request, sess *ChatSession) error {
 	var resp ToolResponse
 
 	for {
@@ -98,7 +120,7 @@ func (r *Runtime) agentLoop(ctx context.Context, out string, req *Request) error
 
 		toolOutput := r.callTool(ctx, resp.Name, inType, req)
 
-		out, err = r.chat.Invoke(ctx, toolOutput)
+		out, err = sess.Invoke(ctx, toolOutput)
 		if err != nil {
 			return err
 		}
@@ -123,16 +145,17 @@ func unmarshalOutput(out string, req *Request) error {
 	if out == "" {
 		return ErrInvalidOutput
 	}
+	return UnmarshalValidate([]byte(out), req.Output, req.OutputSchema)
+}
 
-	res, err := gojsonschema.Validate(req.OutputSchema, gojsonschema.NewStringLoader(out))
+func (r *Runtime) preparePrompt(req *Request) (string, error) {
+	compiledPrompt, err := r.compilePrompt(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	if !res.Valid() {
-		return ErrInvalidOutput
-	}
-	return json.Unmarshal([]byte(out), req.Output)
+	prompt := getPrompt(compiledPrompt, req)
+	return prompt, nil
 }
 
 func getPrompt(userPrompt string, req *Request) string {
