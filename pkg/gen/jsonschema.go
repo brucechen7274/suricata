@@ -41,14 +41,24 @@ func (gen *JSONSchemaGenerator) GenerateJSONSchema(name string, msg *spec.Messag
 		return schema, nil
 	}
 
-	schema = map[string]any{
-		"type":       "object",
-		"properties": map[string]any{},
+	schema, err := gen.generateJSONSchema(msg, allMessages)
+	if err != nil {
+		return nil, err
 	}
 
-	properties := schema["properties"].(map[string]any)
-	requiredFields := []string{}
+	gen.schemas[name] = schema
+	return schema, nil
+}
 
+func (gen *JSONSchemaGenerator) generateJSONSchema(msg *spec.Message, allMessages map[string]spec.Message) (JSONSchema, error) {
+	properties := make(map[string]any)
+
+	schema := map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+
+	requiredFields := []string{}
 	for _, field := range msg.Fields {
 		fieldSchema, err := gen.fieldToSchema(field, allMessages)
 		if err != nil {
@@ -66,7 +76,6 @@ func (gen *JSONSchemaGenerator) GenerateJSONSchema(name string, msg *spec.Messag
 	if len(requiredFields) > 0 {
 		schema["required"] = requiredFields
 	}
-
 	return schema, nil
 }
 

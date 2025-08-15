@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/format"
-	"log"
 	"strings"
 
 	"github.com/ostafen/suricata/pkg/spec"
@@ -66,8 +65,7 @@ func (gen *CodeGenerator) Generate(spec *spec.Spec) ([]byte, error) {
 
 	src, err := format.Source(gen.buf.Bytes())
 	if err != nil {
-		log.Printf("warning: failed to format generated code: %v", err)
-		return gen.buf.Bytes(), nil
+		return gen.buf.Bytes(), err
 	}
 	return src, nil
 }
