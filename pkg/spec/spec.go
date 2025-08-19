@@ -26,9 +26,15 @@ import (
 type Spec struct {
 	Version  string             `yaml:"version"`
 	Package  string             `yaml:"package"`
+	Enums    map[string]Enum    `yaml:"enums"`
 	Messages map[string]Message `yaml:"messages"`
 	Tools    map[string]Tool    `yaml:"tools"`
 	Agents   map[string]Agent   `yaml:"agents"`
+}
+
+type Enum struct {
+	Description string   `yaml:"description,omitempty"`
+	Values      []string `yaml:"values"`
 }
 
 type Message struct {
@@ -86,12 +92,22 @@ func isPrimitiveType(t string) bool {
 	}
 }
 
+// isEnumType checks if the given type is a defined enum type
+func (spec *Spec) isEnumType(t string) bool {
+	_, exists := spec.Enums[t]
+	return exists
+}
+
 func (spec *Spec) Validate() error {
 	if spec.Version == "" {
 		return fmt.Errorf("spec: version is required")
 	}
 	if spec.Package == "" {
 		return fmt.Errorf("spec: package is required")
+	}
+
+	if err := spec.validateEnums(); err != nil {
+		return err
 	}
 
 	if err := spec.validateMessages(); err != nil {
@@ -102,6 +118,29 @@ func (spec *Spec) Validate() error {
 		return err
 	}
 	return spec.validateAgents()
+}
+
+func (spec *Spec) validateEnums() error {
+	for name, enum := range spec.Enums {
+		if name == "" {
+			return fmt.Errorf("spec: enum has empty name")
+		}
+		if len(enum.Values) == 0 {
+			return fmt.Errorf("spec: enum %q has no values", name)
+		}
+		// Check for duplicate values
+		seen := make(map[string]bool)
+		for _, value := range enum.Values {
+			if value == "" {
+				return fmt.Errorf("spec: enum %q has empty value", name)
+			}
+			if seen[value] {
+				return fmt.Errorf("spec: enum %q has duplicate value %q", name, value)
+			}
+			seen[value] = true
+		}
+	}
+	return nil
 }
 
 func (spec *Spec) validateMessages() error {
@@ -117,7 +156,7 @@ func (spec *Spec) validateMessages() error {
 				return fmt.Errorf("spec: field %q in message %q has empty type", field.Name, name)
 			}
 			// Validate field type existence
-			if !isPrimitiveType(field.Type) {
+			if !isPrimitiveType(field.Type) && !spec.isEnumType(field.Type) {
 				if _, ok := spec.Messages[field.Type]; !ok {
 					return fmt.Errorf("spec: field %q in message %q references undefined type %q", field.Name, name, field.Type)
 				}
