@@ -35,13 +35,13 @@ func NewJSONSchemaGenerator() *JSONSchemaGenerator {
 
 // GenerateJSONSchema returns a JSON Schema object (as a map) for the given message.
 // It recursively includes referenced custom types.
-func (gen *JSONSchemaGenerator) GenerateJSONSchema(name string, msg *spec.Message, allMessages map[string]spec.Message) (JSONSchema, error) {
+func (gen *JSONSchemaGenerator) GenerateJSONSchema(name string, msg *spec.Message, allMessages map[string]spec.Message, allEnums map[string]spec.Enum) (JSONSchema, error) {
 	schema, has := gen.schemas[name]
 	if has {
 		return schema, nil
 	}
 
-	schema, err := gen.generateJSONSchema(msg, allMessages)
+	schema, err := gen.generateJSONSchema(msg, allMessages, allEnums)
 	if err != nil {
 		return nil, err
 	}
@@ -50,7 +50,7 @@ func (gen *JSONSchemaGenerator) GenerateJSONSchema(name string, msg *spec.Messag
 	return schema, nil
 }
 
-func (gen *JSONSchemaGenerator) generateJSONSchema(msg *spec.Message, allMessages map[string]spec.Message) (JSONSchema, error) {
+func (gen *JSONSchemaGenerator) generateJSONSchema(msg *spec.Message, allMessages map[string]spec.Message, allEnums map[string]spec.Enum) (JSONSchema, error) {
 	properties := make(map[string]any)
 
 	schema := map[string]any{
@@ -60,7 +60,7 @@ func (gen *JSONSchemaGenerator) generateJSONSchema(msg *spec.Message, allMessage
 
 	requiredFields := []string{}
 	for _, field := range msg.Fields {
-		fieldSchema, err := gen.fieldToSchema(field, allMessages)
+		fieldSchema, err := gen.fieldToSchema(field, allMessages, allEnums)
 		if err != nil {
 			return nil, fmt.Errorf("field %q: %w", field.Name, err)
 		}
@@ -80,36 +80,50 @@ func (gen *JSONSchemaGenerator) generateJSONSchema(msg *spec.Message, allMessage
 }
 
 // fieldToSchema generates the JSON Schema for a single field, recursively if needed.
-func (gen *JSONSchemaGenerator) fieldToSchema(field spec.Field, allMessages map[string]spec.Message) (map[string]interface{}, error) {
+func (gen *JSONSchemaGenerator) fieldToSchema(field spec.Field, allMessages map[string]spec.Message, allEnums map[string]spec.Enum) (map[string]interface{}, error) {
 	var baseSchema map[string]any
 
-	switch field.Type {
-	case "string":
-		baseSchema = map[string]any{"type": "string"}
-	case "int", "int32", "int64":
-		baseSchema = map[string]any{"type": "integer"}
-	case "float", "float32", "float64":
-		baseSchema = map[string]any{"type": "number"}
-	case "bool":
-		baseSchema = map[string]any{"type": "boolean"}
-	case "datetime":
-		baseSchema = map[string]any{"type": "string", "format": "date-time"} // RFC3339
-	default:
-		// Custom type - lookup in allMessages
-		msg, ok := allMessages[field.Type]
-		if !ok {
-			return nil, fmt.Errorf("unknown custom type %q", field.Type)
+	// Check if it's an enum type
+	if enum, isEnum := allEnums[field.Type]; isEnum {
+		baseSchema = map[string]any{
+			"type": "string",
+			"enum": enum.Values,
 		}
-
-		// Recursive schema for nested message
-		nestedSchema, err := gen.GenerateJSONSchema(field.Type, &msg, allMessages)
-		if err != nil {
-			return nil, err
+		if enum.Description != "" {
+			baseSchema["description"] = enum.Description
 		}
-		baseSchema = nestedSchema
 	}
 
-	if field.Description != "" {
+	// Check primitive types and custom message types
+	if baseSchema == nil {
+		switch field.Type {
+		case "string":
+			baseSchema = map[string]any{"type": "string"}
+		case "int", "int32", "int64":
+			baseSchema = map[string]any{"type": "integer"}
+		case "float", "float32", "float64":
+			baseSchema = map[string]any{"type": "number"}
+		case "bool":
+			baseSchema = map[string]any{"type": "boolean"}
+		case "datetime":
+			baseSchema = map[string]any{"type": "string", "format": "date-time"} // RFC3339
+		default:
+			// Custom message type - lookup in allMessages
+			msg, ok := allMessages[field.Type]
+			if !ok {
+				return nil, fmt.Errorf("unknown custom type %q", field.Type)
+			}
+
+			// Recursive schema for nested message
+			nestedSchema, err := gen.GenerateJSONSchema(field.Type, &msg, allMessages, allEnums)
+			if err != nil {
+				return nil, err
+			}
+			baseSchema = nestedSchema
+		}
+	}
+
+	if field.Description != "" && baseSchema["description"] == nil {
 		baseSchema["description"] = field.Description
 	}
 
